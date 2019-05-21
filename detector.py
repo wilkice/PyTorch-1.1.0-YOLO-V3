@@ -93,16 +93,23 @@ for i in dataloader:
             objs = [classes[int(x[-1])] for x in prediction]
             
             print(objs)
-            
-            box1 = np.array(prediction[0,1:5] * 225 / 608)
-            box2 = np.array(prediction[1,1:5] * 225 / 608)
+
             dataset_notensor = dset.ImageFolder('imgs')
             im = dataset_notensor[img_num][0]
-            print(box1)
             draw = ImageDraw.Draw(im)
-            draw.rectangle(box1, outline='red', width=2)
-            draw.rectangle(box2, outline='red', width=2)
-            im.save('haha.png')
+
+            for k in range(prediction.size(0)):
+
+                box = np.array(prediction[k,1:5])
+                box[0] *= 872 /608
+                box[1] *= 568 / 608
+                box[2] *= 872 /608
+                box[3] *= 568 / 608
+                
+                
+                draw.rectangle(box,  outline='red', width=2)
+            draw.text((100,100),'test')
+            im.save('prediction_'+str(img_num)+'.jpg')
             img_num +=1
             
 
