@@ -2,7 +2,7 @@
 implement yolo v3 from scratch 
 PyTorch: 1.1.0
 '''
-#TODO: architecture 107
+# TODO: architecture 107
 
 import torch
 import torch.nn as nn
@@ -12,17 +12,18 @@ from torch.autograd import Variable
 from util import predict_transform
 import cv2
 
+
 def parse_cfg(cfgfile):
     """
     Input: cfgfile
-    
+
     Return: list of layer infos and net info
     """
     with open(cfgfile, 'r') as f:
         lines = f.read().split('\n')
-        lines = [x.strip() for x in lines if len(x) > 0 and x[0]!= '#']
-        
-        block = {} # info about a specific block
+        lines = [x.strip() for x in lines if len(x) > 0 and x[0] != '#']
+
+        block = {}  # info about a specific block
         blocks = []  # list of all blocks
 
         for line in lines:
@@ -43,10 +44,12 @@ class EmptyLayer(nn.Module):
     def __init__(self):
         super(EmptyLayer, self).__init__()
 
+
 class DetectionLayer(nn.Module):
     def __init__(self, anchors):
         super(DetectionLayer, self).__init__()
         self.anchors = anchors
+
 
 def create_modules(blocks):
     """
@@ -72,14 +75,15 @@ def create_modules(blocks):
             kernel_size = int(x['size'])
             stride = int(x['stride'])
             activation = x['activation']
-            
+
             #TODO: WHY
             if padding:
-                pad = (kernel_size -1) // 2
+                pad = (kernel_size - 1) // 2
             else:
                 pad = 0
-            
-            conv = nn.Conv2d(prev_filters, filters,kernel_size,stride=stride,padding=pad, bias=bias)
+
+            conv = nn.Conv2d(prev_filters, filters, kernel_size,
+                             stride=stride, padding=pad, bias=bias)
             module.add_module('conv_{}'.format(index), conv)
             if batch_normalize:
                 bn = nn.BatchNorm2d(filters)
@@ -88,12 +92,13 @@ def create_modules(blocks):
             if activation == 'leaky':
                 activn = nn.LeakyReLU(0.1, inplace=True)
                 module.add_module('leaky_{}'.format(index), activn)
-        
+
         elif x['type'] == 'upsample':
             stride = int(x['stride'])
-            upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            upsample = nn.Upsample(
+                scale_factor=2, mode='bilinear', align_corners=True)
             module.add_module('upsample_{}'.format(index), upsample)
-        
+
         elif x['type'] == 'route':
             route = EmptyLayer()
             module.add_module('route_{}'.format(index), route)
@@ -116,16 +121,18 @@ def create_modules(blocks):
 
             anchors = x['anchors'].split(',')
             anchors = [int(a) for a in anchors]
-            anchors = [(anchors[i], anchors[i+1]) for i in range(0, len(anchors), 2)]
+            anchors = [(anchors[i], anchors[i+1])
+                       for i in range(0, len(anchors), 2)]
             anchors = [anchors[i] for i in mask]
 
             detection = DetectionLayer(anchors)
             module.add_module('detection_{}'.format(index), detection)
-        
+
         module_list.append(module)
         prev_filters = filters
         output_filters.append(filters)
     return (net_info, module_list)
+
 
 class Darknet(nn.Module):
     def __init__(self, cfgfile):
@@ -152,7 +159,7 @@ class Darknet(nn.Module):
                 else:
                     map1 = outputs[i + layers[0]]
                     map2 = outputs[layers[1]]
-                    #TODO: why 1
+                    # TODO: why 1
                     x = torch.cat((map1, map2), 1)
 
             elif module_type == 'shortcut':
@@ -160,13 +167,13 @@ class Darknet(nn.Module):
                 x = outputs[i-1] + outputs[i+from_]
 
             elif module_type == 'yolo':
-                
+
                 anchors = self.module_list[i][0].anchors
                 inp_dim = int(self.net_info['height'])
                 num_classes = int(module['classes'])
 
-                x =x.data
-                x = predict_transform(x, inp_dim,anchors,num_classes,False)
+                x = x.data
+                x = predict_transform(x, inp_dim, anchors, num_classes, False)
                 if not write:
                     detections = x
                     write = 1
@@ -176,12 +183,12 @@ class Darknet(nn.Module):
         return detections
 
     def load_weights(self, weightfile):
-        with open(weightfile,'rb') as f:
+        with open(weightfile, 'rb') as f:
             header = np.fromfile(f, dtype=np.int32, count=5)
             self.header = torch.from_numpy(header)
             self.seen = self.header[3]
 
-            weights = np.fromfile(f, dtype = np.float32)
+            weights = np.fromfile(f, dtype=np.float32)
         ptr = 0
         for i in range(len(self.module_list)):
             module_type = self.blocks[i+1]['type']
@@ -197,16 +204,20 @@ class Darknet(nn.Module):
                     bn = model[1]
                     num_bn_biases = bn.bias.numel()
 
-                    bn_biases = torch.from_numpy(weights[ptr:ptr+num_bn_biases])
-                    ptr +=num_bn_biases
-
-                    bn_weights = torch.from_numpy(weights[ptr:ptr+num_bn_biases])
-                    ptr +=num_bn_biases
-
-                    bn_running_mean = torch.from_numpy(weights[ptr:ptr+num_bn_biases])
+                    bn_biases = torch.from_numpy(
+                        weights[ptr:ptr+num_bn_biases])
                     ptr += num_bn_biases
 
-                    bn_running_var = torch.from_numpy(weights[ptr:ptr+num_bn_biases])
+                    bn_weights = torch.from_numpy(
+                        weights[ptr:ptr+num_bn_biases])
+                    ptr += num_bn_biases
+
+                    bn_running_mean = torch.from_numpy(
+                        weights[ptr:ptr+num_bn_biases])
+                    ptr += num_bn_biases
+
+                    bn_running_var = torch.from_numpy(
+                        weights[ptr:ptr+num_bn_biases])
                     ptr += num_bn_biases
 
                     bn_biases = bn_biases.view_as(bn.bias.data)
@@ -235,13 +246,14 @@ class Darknet(nn.Module):
                 conv.weight.data.copy_(conv_weights)
 
 
-
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
-    img = cv2.resize(img, (416,416))          #Resize to the input dimension
-    img_ =  img[:,:,::-1].transpose((2,0,1))  # BGR -> RGB | H X W C -> C X H X W 
-    img_ = img_[np.newaxis,:,:,:]/255.0       #Add a channel at 0 (for batch) | Normalise
-    img_ = torch.from_numpy(img_).float()     #Convert to float
+    img = cv2.resize(img, (416, 416))  # Resize to the input dimension
+    # BGR -> RGB | H X W C -> C X H X W
+    img_ = img[:, :, ::-1].transpose((2, 0, 1))
+    # Add a channel at 0 (for batch) | Normalise
+    img_ = img_[np.newaxis, :, :, :]/255.0
+    img_ = torch.from_numpy(img_).float()  # Convert to float
     img_ = Variable(img_)                     # Convert to Variable
     return img_
 
@@ -250,9 +262,3 @@ def get_test_input():
 # inp = get_test_input()
 # pred = model(inp, torch.cuda.is_available())
 # print(pred.size())
-
-            
-
-
-
-

@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -83,6 +85,7 @@ def bbox_iou(box1, box2):
 
     iou = inter_area / (b1_area+b2_area-inter_area)
     return iou
+
 
 def write_results(prediction, confidence, num_classes, nms_conf=0.4):
     # whether there is an object
@@ -192,5 +195,46 @@ def load_classes(namesfile):
     return names
 
 
-def draw_box():
-    pass
+def test_read_imgs(folder):
+    """read imgs from folder: imgs
+
+    return:
+        img_list: list contains img name
+        img_data: list contains img data(3 * 608 * 608), rgb
+        img_size: list contains img width and height
+    """
+    img_list = os.listdir(folder)
+    img_size = []
+    img_data = []
+    for i in range(len(img_list)):
+        img = cv2.imread(os.path.join(folder, img_list[i]) )
+        img_size.append(img.shape[:2])
+        img_data.append(img)
+    return img_list, img_data, img_size
+
+
+def test_save_img(name, img_data, img_size, prediction, objs):
+    """draw box on img and save to disk
+    Arguments: 
+        name: img name
+        img_data: img metadata, the output of cv2.imread
+        img_size: tuple (height, width)
+        prediction: prediction output (n*8), n means the num of objects in one image
+        objs: total objects name in this image, list
+    """
+    num = 0
+    height, width = img_size
+    for one_box in prediction:
+        box = one_box[1:5]
+        x1 = box[0] * width / 608
+        y1 = box[1] * height / 608
+        x2 = box[2] * width / 608
+        y2 = box[3] * height / 608
+
+        obj = objs[num]
+        num += 1
+
+        cv2.rectangle(img_data, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(img_data, obj, (x1, y1-10),
+                    cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 1, cv2.LINE_AA)
+        cv2.imwrite(name, img_data)
